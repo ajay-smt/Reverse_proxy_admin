@@ -31,6 +31,14 @@ app.get('/health', (_req, res) => {
   });
 });
 
+app.get('/version', (_req, res) => {
+  res.json({
+    version: '30.5.2026',
+    name: 'reverse-proxy-backend',
+    status: 'active',
+  });
+});
+
 app.use('/internal', express.json({ limit: '1mb' }), captureRouter);
 
 // Serve static assets or fallback to index.html for SPA routes (only in production / if dist exists)
