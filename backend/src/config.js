@@ -10,14 +10,26 @@ const parseList = (value) =>
         .filter(Boolean)
     : [];
 
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5000',
+  'http://127.0.0.1:5000',
+];
+
+const envOrigins = parseList(process.env.CORS_ORIGINS);
+const resolvedOrigins = envOrigins.length > 0 ? envOrigins : defaultOrigins;
+
+const publicUrl = process.env.PROXY_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL;
+if (publicUrl) {
+  resolvedOrigins.push(publicUrl.replace(/\/$/, ''));
+}
+
 export const config = {
   port: Number(process.env.PORT) || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
   allowedHosts: parseList(process.env.ALLOWED_HOSTS),
-  corsOrigins: parseList(process.env.CORS_ORIGINS) || [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-  ],
+  corsOrigins: resolvedOrigins,
   proxyPublicUrl: (
     process.env.PROXY_PUBLIC_URL || 
     process.env.RENDER_EXTERNAL_URL || 
