@@ -2,11 +2,17 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import express from 'express';
 import morgan from 'morgan';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import { connectMongo } from './db/mongodb.js';
 import { corsMiddleware } from './middleware/cors.js';
 import captureRouter from './routes/capture.js';
 import proxyRouter from './routes/proxy.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -26,6 +32,36 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/internal', express.json({ limit: '1mb' }), captureRouter);
+
+// Serve static assets or fallback to index.html for SPA routes (only in production / if dist exists)
+const distPath = path.join(__dirname, '../../frontend/dist');
+if (fs.existsSync(distPath)) {
+  console.log(`[server] Serving static frontend files from: ${distPath}`);
+  
+  // Debug logging for root path
+  app.use((req, res, next) => {
+    if (req.path === '/') {
+      console.log('[server] Request headers for /:', {
+        'sec-fetch-dest': req.headers['sec-fetch-dest'],
+        'sec-fetch-mode': req.headers['sec-fetch-mode'],
+        referer: req.headers['referer'],
+        cookie: req.headers['cookie']
+      });
+    }
+    next();
+  });
+
+  // Serve static files for parent window requests (not iframes)
+  app.use((req, res, next) => {
+    const dest = req.headers['sec-fetch-dest'];
+    if (dest === 'iframe') {
+      return next();
+    }
+    express.static(distPath)(req, res, next);
+  });
+} else {
+  console.warn('[server] frontend/dist directory not found. Static file serving skipped.');
+}
 
 app.use(proxyRouter);
 

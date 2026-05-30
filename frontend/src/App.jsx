@@ -3,6 +3,7 @@ import ErrorScreen from './components/ErrorScreen.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
 import Navbar from './components/Navbar.jsx';
 import ProxyFrame from './components/ProxyFrame.jsx';
+import AdminDashboard from './components/AdminDashboard.jsx';
 import { useNavigationHistory } from './hooks/useNavigationHistory.js';
 import { checkProxyHealth } from './services/api.js';
 import { normalizeUrl } from './utils/url.js';
@@ -28,6 +29,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [backendOk, setBackendOk] = useState(null);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   useEffect(() => {
     setUrlInput(currentUrl);
@@ -118,6 +120,10 @@ export default function App() {
     );
   }
 
+  if (showAdmin) {
+    return <AdminDashboard onClose={() => setShowAdmin(false)} />;
+  }
+
   return (
     <div className="flex h-full flex-col">
       <Navbar
@@ -130,6 +136,7 @@ export default function App() {
         canGoBack={canGoBack}
         canGoForward={canGoForward}
         isLoading={isLoading}
+        onOpenAdmin={() => setShowAdmin(true)}
       />
 
       <main className="relative min-h-0 flex-1">

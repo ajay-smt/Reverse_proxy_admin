@@ -23,6 +23,7 @@ export default function Navbar({
   canGoBack,
   canGoForward,
   isLoading,
+  onOpenAdmin,
 }) {
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -95,6 +96,13 @@ export default function Navbar({
           className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent"
         >
           Go
+        </button>
+        <button
+          type="button"
+          onClick={onOpenAdmin}
+          className="shrink-0 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 active:scale-95"
+        >
+          Admin Console
         </button>
       </form>
     </header>

