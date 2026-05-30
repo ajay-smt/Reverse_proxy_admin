@@ -18,10 +18,11 @@ export const config = {
     'http://localhost:5173',
     'http://127.0.0.1:5173',
   ],
-  proxyPublicUrl: (process.env.PROXY_PUBLIC_URL || 'http://localhost:5000').replace(
-    /\/$/,
-    ''
-  ),
+  proxyPublicUrl: (
+    process.env.PROXY_PUBLIC_URL || 
+    process.env.RENDER_EXTERNAL_URL || 
+    'http://localhost:5000'
+  ).replace(/\/$/, ''),
   proxyTimeoutMs: Number(process.env.PROXY_TIMEOUT_MS) || 30000,
   maxRewriteBytes: Number(process.env.MAX_REWRITE_BYTES) || 5 * 1024 * 1024,
   mongodbUri: process.env.MONGODB_URI || '',
