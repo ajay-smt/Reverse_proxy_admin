@@ -8,7 +8,13 @@ const router = express.Router();
 function wantsHtmlRedirect(req) {
   if (req.method !== 'GET') return false;
   const accept = req.headers.accept || '';
-  return accept.includes('text/html') || accept.includes('*/*');
+  // Must explicitly ask for text/html and not be an image, stylesheet, or script asset
+  return (
+    accept.includes('text/html') &&
+    !accept.includes('image/') &&
+    !accept.includes('text/css') &&
+    !accept.includes('application/javascript')
+  );
 }
 
 router.get('/proxy', attachTargetUrl, (req, res, next) => {
@@ -18,8 +24,6 @@ router.get('/proxy', attachTargetUrl, (req, res, next) => {
   if (!validation.ok) {
     return res.status(validation.status).json({ error: validation.message });
   }
-
-  setProxyBaseCookie(res, targetUrl);
 
   if (wantsHtmlRedirect(req) && req.query.redirect !== '0') {
     const nextPath = new URL(targetUrl).pathname || '/';

@@ -481,9 +481,6 @@ export function rewriteBody(content, contentType, pageUrl) {
   if (type.includes('text/css')) {
     return rewriteCss(content, pageUrl);
   }
-  if (type.includes('javascript') || type.includes('ecmascript')) {
-    return rewriteJs(content, pageUrl);
-  }
 
   return content;
 }
