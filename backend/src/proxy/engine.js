@@ -75,7 +75,7 @@ export const proxyMiddleware = createProxyMiddleware({
   changeOrigin: true,
   ws: true,
   secure: true,
-  followRedirects: true,
+  followRedirects: false,
   timeout: config.proxyTimeoutMs,
   proxyTimeout: config.proxyTimeoutMs,
   selfHandleResponse: true,
