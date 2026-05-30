@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    @apply h-full w-full overflow-hidden;
+  }
+
+  * {
+    @apply box-border;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #2d3a4f transparent;
+  }
+}

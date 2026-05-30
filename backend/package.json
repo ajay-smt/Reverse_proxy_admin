@@ -1,0 +1,25 @@
+{
+  "name": "reverse-proxy-backend",
+  "version": "1.0.0",
+  "description": "Reverse proxy server for embedding external websites",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "compression": "^1.7.4",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "http-proxy-middleware": "^3.0.3",
+    "mongoose": "^8.24.0",
+    "morgan": "^1.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
