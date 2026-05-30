@@ -1,17 +1,13 @@
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { config } from '../config.js';
-import { stripFrameBlockingHeaders, rewriteLocationHeader } from '../middleware/security.js';
-import { filterProxyCookies, setProxyBaseCookie } from '../utils/cookies.js';
+import { stripFrameBlockingHeaders, rewriteLocationHeader, rewriteSetCookieHeaders, setProxyBaseCookieHeader } from '../middleware/security.js';
+import { filterProxyCookies } from '../utils/cookies.js';
 import { rewriteBody } from '../utils/rewrite.js';
 import { resolveTargetUrl } from '../utils/target.js';
 
 const REWRITABLE_TYPES = [
   'text/html',
   'text/css',
-  'application/javascript',
-  'text/javascript',
-  'application/x-javascript',
-  'application/ecmascript',
 ];
 
 function shouldRewriteResponse(contentType) {
@@ -65,9 +61,6 @@ function collectAndRewrite(proxyRes, req, res, targetUrl) {
 
 export function attachTargetUrl(req, res, next) {
   req._proxyTargetUrl = resolveTargetUrl(req);
-  if (req._proxyTargetUrl) {
-    setProxyBaseCookie(res, req._proxyTargetUrl);
-  }
   next();
 }
 
@@ -111,6 +104,13 @@ export const proxyMiddleware = createProxyMiddleware({
         req.headers['user-agent'] || 'Mozilla/5.0 (compatible; ReverseProxy/1.0)'
       );
       proxyReq.setHeader('Referer', targetUrl);
+
+      if (req.headers.origin) {
+        try {
+          const targetOrigin = new URL(targetUrl).origin;
+          proxyReq.setHeader('Origin', targetOrigin);
+        } catch (e) {}
+      }
     },
 
     proxyRes(proxyRes, req, res) {
@@ -120,9 +120,14 @@ export const proxyMiddleware = createProxyMiddleware({
         return;
       }
 
-      setProxyBaseCookie(res, targetUrl);
+      const accept = req.headers.accept || '';
+      const isProxyEntry = req.path === '/proxy' || req.path.startsWith('/proxy/');
+      if (isProxyEntry || accept.includes('text/html')) {
+        setProxyBaseCookieHeader(proxyRes, targetUrl);
+      }
       stripFrameBlockingHeaders(proxyRes);
       rewriteLocationHeader(proxyRes, targetUrl);
+      rewriteSetCookieHeaders(proxyRes);
 
       if (req.method === 'HEAD') {
         res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);

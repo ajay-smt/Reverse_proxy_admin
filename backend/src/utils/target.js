@@ -22,8 +22,24 @@ export function getTargetFromPath(req) {
   }
 }
 
+export function getTargetFromReferer(req) {
+  const referer = req.headers['referer'] || req.headers['Referer'];
+  if (!referer) return null;
+
+  try {
+    const parsedReferer = new URL(referer);
+    if (parsedReferer.pathname === '/proxy' || parsedReferer.pathname.startsWith('/proxy/')) {
+      const urlParam = parsedReferer.searchParams.get('url');
+      if (urlParam && isValidHttpUrl(urlParam)) {
+        return urlParam;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 export function resolveTargetUrl(req) {
-  return getTargetFromQuery(req) || getTargetFromPath(req);
+  return getTargetFromQuery(req) || getTargetFromPath(req) || getTargetFromReferer(req);
 }
 
 export function validateTarget(url) {
